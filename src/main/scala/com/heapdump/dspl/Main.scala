@@ -28,9 +28,9 @@ object Main {
     /**
      * Static main
      *
-     * @param args
+     * @param args Command line args
      */
-    def main(args: Array[String]): Unit = {
+    def main(args: Array[String]) = {
         println("Hello world!")
     }
 }
