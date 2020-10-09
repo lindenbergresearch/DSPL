@@ -16,10 +16,7 @@
 **    with or without modification please see LICENSE.                 **
 **                                                                     **
 \*                                                                     */
-
-
 grammar DSPL;
-
 
 program
    : statement +
