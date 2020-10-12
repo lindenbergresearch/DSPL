@@ -25,47 +25,75 @@ import java.util.Date
 
 import com.heapdump.dspl.utils.LogLevel._
 import com.heapdump.dspl.utils.Utils.{StackTrace, getStackTrace}
+import jdk.internal.joptsimple.internal.Messages.message
 
 
 /**
- * Define a log level
+ * Log-level base class.
  *
- * @param order Order ID
+ * @param id    Log-level internal ID
+ * @param label Textual representation
  */
-case class LogLevel(order: Int) extends Ordered[LogLevel] {
-    /**
-     * Implement to provide comparison of log-levels
-     * @param that The other log-level
-     * @return
-     */
-    override def compare(that: LogLevel): Int = this.order - that.order
+sealed class LogLevel(val id: Int, label: String) extends Ordered[LogLevel] {
     
     /**
-     * Returns a textual representation of a log-level
+     * Implement Ordered to be able to compare LogLevels
+     *
+     * @param that The other Log-level
+     * @return
+     */
+    override def compare(that: LogLevel): Int = this.id - that.id
+    
+    /**
+     * Textual representation
      *
      * @return
      */
-    override def toString: String = order match {
-        case 0x00 => "FATAL"
-        case 0x02 => "ERROR"
-        case 0x03 => "WARN"
-        case 0x04 => "INFO"
-        case 0x05 => "DEBUG"
-        case 0x06 => "TRACE"
-    }
+    override def toString: String = s"${label.toUpperCase}"
 }
 
-
 /**
- * All used log-levels
+ * Log-level object defining helper methods and default levels.
+ *
  */
 object LogLevel {
-    val Fatal: LogLevel = LogLevel(0x00)
-    val Error: LogLevel = LogLevel(0x02)
-    val Warn: LogLevel = LogLevel(0x03)
-    val Info: LogLevel = LogLevel(0x04)
-    val Debug: LogLevel = LogLevel(0x05)
-    val Trace: LogLevel = LogLevel(0x06)
+    var id = 0
+    
+    /**
+     * Create a log-level with a given id and label.
+     *
+     * @param id    Log-level internal ID
+     * @param label Textual representation
+     * @return
+     */
+    def apply(id: Int, label: String): LogLevel = new LogLevel(id, label)
+    
+    /**
+     * Create a log-level with a given id and label as pair.
+     *
+     * @param pair Pair of Int and String
+     * @return
+     */
+    def apply(pair: (Int, String)): LogLevel = new LogLevel(pair._1, pair._2)
+    
+    /**
+     * Create a log-level with a given label and automatic creation of the internal id.
+     *
+     * @param label Textual representation
+     * @return
+     */
+    def apply(label: String): LogLevel = {
+        id += 1
+        LogLevel(id -> label)
+    }
+    
+    /** Standard log-level */
+    val Fatal: LogLevel = LogLevel("Fatal")
+    val Error: LogLevel = LogLevel("Error")
+    val Warn: LogLevel = LogLevel("Warn ")
+    val Info: LogLevel = LogLevel("Info ")
+    val Debug: LogLevel = LogLevel("Debug")
+    val Trace: LogLevel = LogLevel("Trace")
 }
 
 
@@ -77,10 +105,7 @@ object LogLevel {
  * @param text      The actual message
  * @param exception The raised exception (on error only)
  */
-case class LogMessage(level: LogLevel, trace: StackTrace, text: String, exception: Option[Exception]) {
-
-}
-
+sealed case class LogMessage(level: LogLevel, trace: StackTrace, text: String, exception: Option[Exception])
 
 /**
  * Simple logging object
@@ -122,23 +147,22 @@ object Logger {
         config.handler.foreach(_.handle(message))
     }
     
-    /**
-     * Log as debug message
-     *
-     * @param text
-     * @param exception
-     */
-    def debug(text: String, exception: Option[Exception] = None): Unit = {
-        createMessage(Debug, text, exception)
-    }
+    /** Standard logger methods */
+    def fatal(text: String, exception: Option[Exception] = None): Unit = createMessage(Fatal, text, exception)
+    def warn(text: String, exception: Option[Exception] = None): Unit = createMessage(Warn, text, exception)
+    def info(text: String, exception: Option[Exception] = None): Unit = createMessage(Info, text, exception)
+    def debug(text: String, exception: Option[Exception] = None): Unit = createMessage(Debug, text, exception)
+    def trace(text: String, exception: Option[Exception] = None): Unit = createMessage(Trace, text, exception)
+    def error(text: String, exception: Option[Exception] = None): Unit = createMessage(Error, text, exception)
     
+    
+    info("Logger created.")
 }
 
 /**
  * Simple output adapter for logging messages
  */
 trait AbstractLogHandler {
-    
     /**
      * Return the current date string.
      *
@@ -153,10 +177,13 @@ trait AbstractLogHandler {
     /**
      * Return the log-message as formatted string
      *
-     * @param message
+     * @param message Message instance
      * @return
      */
-    def format(message: LogMessage, extended: Boolean = false) = s"""[${dateToStr()}] ${message.level} ${message.text} ${if (extended) getStackTrace(4)}"""
+    def format(message: LogMessage, extended: Boolean = false): String = message.level match {
+        case Fatal | Error | Trace => s"""[${dateToStr()}] ${message.level} ${message.text} (from: ${getStackTrace(11)})"""
+        case _ => s"""[${dateToStr()}] ${message.level} ${message.text}"""
+    }
     
     /**
      * Handler to be implemented.
@@ -190,8 +217,11 @@ class ConsoleLogHandler extends AbstractLogHandler {
      * @param message The log message to be handled
      * @return
      */
-    override def handle(message: LogMessage): Unit =
-        println(format(message))
+    override def handle(message: LogMessage): Unit = message.level match {
+        case Fatal | Error => System.err.println(format(message, extended = true))
+        case _ => System.out.println(format(message))
+    }
+    
 }
 
 
